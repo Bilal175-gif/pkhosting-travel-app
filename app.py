@@ -30,9 +30,10 @@ import streamlit as st
 # Env configuration (all optional — see .env.example)
 # ---------------------------------------------------------------------------
 
-APP_TITLE = "PKHosting & Travel.pk — Customer App"
-SUPPORT_PHONE = "+92 300 0000000"
-SUPPORT_EMAIL = "support@example.com"
+APP_TITLE = os.getenv("APP_TITLE", "PKHosting & Travel.pk — Customer App")
+DEFAULT_TAB = os.getenv("DEFAULT_TAB", "Home")
+SUPPORT_PHONE = os.getenv("SUPPORT_PHONE", "+92 300 0000000")
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@example.com")
 
 SAMPLE_NOTE = (
     "All prices, plans and packages on this page are SAMPLE data "
@@ -427,13 +428,13 @@ def tab_index_for(name: str, tabs: list[str]) -> int:
 # UI
 # ---------------------------------------------------------------------------
 
-TABS = ["🏠 Home", "🖥️ PKHosting", "✈️ Travel.pk"]
+TABS = ["🏠 Home", "🖥️ PKHosting", "✈️ Travel.pk", "📞 Contact"]
 
 
 def render_tab_bar() -> None:
     """Custom tab bar (real navigation, incl. quick links from Home)."""
     if "active_tab" not in st.session_state:
-        st.session_state.active_tab = 0
+        st.session_state.active_tab = tab_index_for(DEFAULT_TAB, TABS)
     cols = st.columns(len(TABS))
     for i, label in enumerate(TABS):
         with cols[i]:
@@ -467,7 +468,7 @@ def render_home() -> None:
 
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("\U0001F5A5\uFE0F PKHosting")
+        st.subheader("🖥️ PKHosting")
         st.write(
             "**Shared hosting for Pakistani businesses** — pick a plan, "
             "brainstorm a domain name, and check the support FAQ."
@@ -475,11 +476,11 @@ def render_home() -> None:
         st.write("- 3 shared-hosting plans (sample pricing in PKR/year)")
         st.write("- Domain name idea generator with availability hints")
         st.write("- Support FAQ: nameservers, SSL, backups, refunds")
-        if st.button("Explore hosting plans \u2192", key="home_go_hosting",
+        if st.button("Explore hosting plans →", key="home_go_hosting",
                      use_container_width=True):
             go_to_tab(1)
     with col2:
-        st.subheader("\u2708\uFE0F Travel.pk")
+        st.subheader("✈️ Travel.pk")
         st.write(
             "**Tours & travel** — browse domestic, international and Umrah "
             "packages, filter by budget and duration, and send a booking enquiry."
@@ -487,14 +488,17 @@ def render_home() -> None:
         st.write("- 12 tour packages across Pakistan and abroad")
         st.write("- Budget & duration filters")
         st.write("- Booking enquiry form with instant reference number")
-        if st.button("Browse tour packages \u2192", key="home_go_travel",
+        if st.button("Browse tour packages →", key="home_go_travel",
                      use_container_width=True):
             go_to_tab(2)
 
     st.divider()
     st.write(
-        f"Need help? Call **{SUPPORT_PHONE}** or email **{SUPPORT_EMAIL}**."
+        f"Need help? Call **{SUPPORT_PHONE}** or email **{SUPPORT_EMAIL}** — "
+        "or use the Contact tab."
     )
+    if st.button("📞 Go to contact form →", key="home_go_contact"):
+        go_to_tab(3)
 
 
 def render_pkhosting() -> None:
@@ -738,6 +742,58 @@ def render_travel() -> None:
             )
 
 
+def render_contact() -> None:
+    st.header("📞 Contact us")
+    st.write(
+        f"Questions about hosting or travel? Call **{SUPPORT_PHONE}**, email "
+        f"**{SUPPORT_EMAIL}**, or send the form below."
+    )
+    with st.form("contact_form"):
+        c_name = st.text_input("Full name *", key="c_name")
+        c_phone = st.text_input("Phone / WhatsApp *", key="c_phone",
+                                placeholder="+92 3XX XXXXXXX")
+        c_topic = st.selectbox("Topic *", CONTACT_TOPICS, key="c_topic")
+        c_message = st.text_area("Message *", key="c_message",
+                                 placeholder="How can we help?")
+        c_sent = st.form_submit_button("Send message", type="primary")
+
+    if c_sent:
+        errors = validate_contact(c_name, c_phone, c_message)
+        if errors:
+            for e in errors:
+                st.error(e)
+        else:
+            ref = make_booking_ref("QRY")
+            st.success(
+                f"Message received! Your enquiry reference is **{ref}**. "
+                f"We will reply on {SUPPORT_PHONE} / {SUPPORT_EMAIL}."
+            )
+            st.table([
+                {"Field": "Reference", "Value": ref},
+                {"Field": "Name", "Value": c_name.strip()},
+                {"Field": "Phone", "Value": c_phone.strip()},
+                {"Field": "Topic", "Value": c_topic},
+                {"Field": "Message", "Value": c_message.strip()},
+            ])
+            csv_data = enquiry_to_csv(
+                [{
+                    "reference": ref,
+                    "name": c_name.strip(),
+                    "phone": c_phone.strip(),
+                    "topic": c_topic,
+                    "message": c_message.strip(),
+                }],
+                ["reference", "name", "phone", "topic", "message"],
+            )
+            st.download_button(
+                "Download enquiry as CSV",
+                data=csv_data,
+                file_name=f"contact-{ref}.csv",
+                mime="text/csv",
+                key="c_csv",
+            )
+
+
 def main() -> None:
     st.set_page_config(page_title=APP_TITLE, layout="wide")
     st.title(APP_TITLE)
@@ -748,6 +804,8 @@ def main() -> None:
         render_pkhosting()
     elif active == 2:
         render_travel()
+    elif active == 3:
+        render_contact()
     else:
         render_home()
     st.divider()
