@@ -427,7 +427,7 @@ def tab_index_for(name: str, tabs: list[str]) -> int:
 # UI
 # ---------------------------------------------------------------------------
 
-TABS = ["🏠 Home", "🖥️ PKHosting"]
+TABS = ["🏠 Home", "🖥️ PKHosting", "✈️ Travel.pk"]
 
 
 def render_tab_bar() -> None:
@@ -462,21 +462,34 @@ def render_home() -> None:
     st.write(
         "One app for two customer needs: reliable **web hosting & domains** "
         "from PKHosting, and **tours, Umrah packages, flights & visas** from "
-        "Travel.pk. Start with hosting below — the travel section lands in "
-        "the next update."
+        "Travel.pk. Pick a section below to get started."
     )
 
-    st.subheader("\U0001F5A5\uFE0F PKHosting")
-    st.write(
-        "**Shared hosting for Pakistani businesses** — pick a plan, "
-        "brainstorm a domain name, and check the support FAQ."
-    )
-    st.write("- 3 shared-hosting plans (sample pricing in PKR/year)")
-    st.write("- Domain name idea generator with availability hints")
-    st.write("- Support FAQ: nameservers, SSL, backups, refunds")
-    if st.button("Explore hosting plans \u2192", key="home_go_hosting",
-                 use_container_width=True):
-        go_to_tab(1)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("\U0001F5A5\uFE0F PKHosting")
+        st.write(
+            "**Shared hosting for Pakistani businesses** — pick a plan, "
+            "brainstorm a domain name, and check the support FAQ."
+        )
+        st.write("- 3 shared-hosting plans (sample pricing in PKR/year)")
+        st.write("- Domain name idea generator with availability hints")
+        st.write("- Support FAQ: nameservers, SSL, backups, refunds")
+        if st.button("Explore hosting plans \u2192", key="home_go_hosting",
+                     use_container_width=True):
+            go_to_tab(1)
+    with col2:
+        st.subheader("\u2708\uFE0F Travel.pk")
+        st.write(
+            "**Tours & travel** — browse domestic, international and Umrah "
+            "packages, filter by budget and duration, and send a booking enquiry."
+        )
+        st.write("- 12 tour packages across Pakistan and abroad")
+        st.write("- Budget & duration filters")
+        st.write("- Booking enquiry form with instant reference number")
+        if st.button("Browse tour packages \u2192", key="home_go_travel",
+                     use_container_width=True):
+            go_to_tab(2)
 
     st.divider()
     st.write(
@@ -620,6 +633,111 @@ def render_pkhosting() -> None:
         with st.expander(q):
             st.write(a)
 
+def render_travel() -> None:
+    st.header("✈️ Travel.pk — Tours & Packages")
+    st.caption(SAMPLE_NOTE)
+
+    st.subheader("Find a package")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        trip_type = st.radio("Trip type", TRIP_TYPES, key="pkg_triptype")
+    with col_f2:
+        max_budget = st.slider(
+            "Max budget (PKR per person)",
+            30000, 400000, 400000, step=5000,
+            key="pkg_budget",
+        )
+    with col_f3:
+        max_days = st.slider("Max duration (days)", 3, 15, 15, key="pkg_days")
+
+    matches = filter_packages(trip_type, max_budget, max_days)
+    st.write(f"**{len(matches)}** package(s) match your filters.")
+    for pkg in matches:
+        with st.container(border=True):
+            st.subheader(f"{pkg['name']} — Rs. {pkg['price_pkr']:,}")
+            st.write(
+                f"📍 {pkg['destination']} · 🕒 {pkg['duration_days']} days · "
+                f"🏷️ {pkg['trip_type']} · *sample price per person*"
+            )
+            st.write(f"✨ {pkg['highlights']}")
+    if not matches:
+        st.info("No packages match — try raising the budget or duration.")
+
+    st.divider()
+    st.subheader("Booking enquiry")
+    st.write(
+        "Fill in the form and we will get back to you. Nothing is sent "
+        "anywhere — download your enquiry as CSV for your records."
+    )
+    with st.form("booking_form"):
+        b_name = st.text_input("Full name *", key="b_name")
+        b_phone = st.text_input("Phone / WhatsApp *", key="b_phone",
+                                placeholder="+92 3XX XXXXXXX")
+        b_email = st.text_input("Email (optional)", key="b_email")
+        b_package = st.selectbox(
+            "Package *",
+            [""] + [p["name"] for p in PACKAGES],
+            key="b_package",
+        )
+        b_date = st.date_input("Preferred travel date", value=date.today(),
+                               key="b_date")
+        b_travelers = st.number_input("Number of travelers *", min_value=1,
+                                      max_value=100, value=2, key="b_travelers")
+        b_notes = st.text_area("Notes (optional)", key="b_notes",
+                               placeholder="Anything we should know?")
+        submitted = st.form_submit_button("Send booking enquiry",
+                                          type="primary")
+
+    if submitted:
+        errors = validate_booking(b_name, b_phone, b_email, b_package,
+                                  int(b_travelers))
+        if errors:
+            for e in errors:
+                st.error(e)
+        else:
+            ref = make_booking_ref("TPK")
+            pkg = next(p for p in PACKAGES if p["name"] == b_package)
+            st.success(f"Enquiry received! Your booking reference is **{ref}**.")
+            st.write("**Summary**")
+            st.table([
+                {"Field": "Reference", "Value": ref},
+                {"Field": "Name", "Value": b_name.strip()},
+                {"Field": "Phone", "Value": b_phone.strip()},
+                {"Field": "Email", "Value": b_email.strip() or "—"},
+                {"Field": "Package", "Value": b_package},
+                {"Field": "Package price (sample, per person)",
+                 "Value": f"Rs. {pkg['price_pkr']:,}"},
+                {"Field": "Travel date", "Value": str(b_date)},
+                {"Field": "Travelers", "Value": str(int(b_travelers))},
+                {"Field": "Notes", "Value": b_notes.strip() or "—"},
+            ])
+            st.info(
+                "Sample data — our team will confirm real availability and "
+                f"pricing on {SUPPORT_PHONE}."
+            )
+            csv_data = enquiry_to_csv(
+                [{
+                    "reference": ref,
+                    "name": b_name.strip(),
+                    "phone": b_phone.strip(),
+                    "email": b_email.strip(),
+                    "package": b_package,
+                    "travel_date": str(b_date),
+                    "travelers": int(b_travelers),
+                    "notes": b_notes.strip(),
+                }],
+                ["reference", "name", "phone", "email", "package",
+                 "travel_date", "travelers", "notes"],
+            )
+            st.download_button(
+                "Download enquiry as CSV",
+                data=csv_data,
+                file_name=f"booking-{ref}.csv",
+                mime="text/csv",
+                key="b_csv",
+            )
+
+
 def main() -> None:
     st.set_page_config(page_title=APP_TITLE, layout="wide")
     st.title(APP_TITLE)
@@ -628,6 +746,8 @@ def main() -> None:
     active = st.session_state.get("active_tab", 0)
     if active == 1:
         render_pkhosting()
+    elif active == 2:
+        render_travel()
     else:
         render_home()
     st.divider()
