@@ -355,6 +355,45 @@ def filter_packages(
     return out
 
 
+def search_packages(packages: list[dict], query: str) -> list[dict]:
+    """Filter a package list by free-text query (name/destination/highlights).
+
+    Case-insensitive, matches any word in the query. Pure function.
+    """
+    q = (query or "").strip().lower()
+    if not q:
+        return list(packages)
+    words = q.split()
+    out = []
+    for pkg in packages:
+        hay = " ".join(
+            str(pkg.get(k, "")) for k in ("name", "destination", "highlights")
+        ).lower()
+        if all(w in hay for w in words):
+            out.append(pkg)
+    return out
+
+
+SORT_OPTIONS = [
+    "Recommended",
+    "Price: low to high",
+    "Price: high to low",
+    "Shortest duration first",
+]
+
+
+def sort_packages(packages: list[dict], sort_key: str) -> list[dict]:
+    """Sort a package list by the given key. Pure function."""
+    items = list(packages)
+    if sort_key == "Price: low to high":
+        items.sort(key=lambda p: p["price_pkr"])
+    elif sort_key == "Price: high to low":
+        items.sort(key=lambda p: p["price_pkr"], reverse=True)
+    elif sort_key == "Shortest duration first":
+        items.sort(key=lambda p: p["duration_days"])
+    return items
+
+
 def _valid_phone(phone: str) -> bool:
     digits = re.sub(r"\D", "", phone or "")
     return len(digits) >= 7
@@ -486,7 +525,7 @@ def render_home() -> None:
             "packages, filter by budget and duration, and send a booking enquiry."
         )
         st.write("- 12 tour packages across Pakistan and abroad")
-        st.write("- Budget & duration filters")
+        st.write("- Search, sort and budget/duration filters")
         st.write("- Booking enquiry form with instant reference number")
         if st.button("Browse tour packages →", key="home_go_travel",
                      use_container_width=True):
@@ -642,6 +681,16 @@ def render_travel() -> None:
     st.caption(SAMPLE_NOTE)
 
     st.subheader("Find a package")
+    col_s1, col_s2 = st.columns([3, 2])
+    with col_s1:
+        search_query = st.text_input(
+            "Search packages",
+            placeholder="e.g. hunza, lake, umrah",
+            key="pkg_search",
+        )
+    with col_s2:
+        sort_key = st.selectbox("Sort by", SORT_OPTIONS, key="pkg_sort")
+
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         trip_type = st.radio("Trip type", TRIP_TYPES, key="pkg_triptype")
@@ -654,7 +703,11 @@ def render_travel() -> None:
     with col_f3:
         max_days = st.slider("Max duration (days)", 3, 15, 15, key="pkg_days")
 
-    matches = filter_packages(trip_type, max_budget, max_days)
+    matches = sort_packages(
+        search_packages(filter_packages(trip_type, max_budget, max_days),
+                        search_query),
+        sort_key,
+    )
     st.write(f"**{len(matches)}** package(s) match your filters.")
     for pkg in matches:
         with st.container(border=True):
