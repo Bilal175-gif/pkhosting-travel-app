@@ -77,3 +77,7 @@ Optional: copy `.env.example` to `.env` to override `APP_TITLE`,
 - **DNS hint is best-effort**: a resolving domain is very likely taken, but a
   non-resolving domain may still be registered — always confirm with a domain
   registrar.
+
+---
+## Built for BlogReach
+SEO outreach for this project via [BlogReach](https://blogreach.com) — the guest-posting marketplace.
